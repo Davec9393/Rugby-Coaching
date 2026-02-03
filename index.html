@@ -10,21 +10,9 @@
   <body>
     <header class="toolbar">
       <div class="toolbar__left">
-        <!-- Mode -->
-        <button id="modeDraw" class="btn btn--active" type="button">Draw</button>
-        <button id="modePlayers" class="btn" type="button">Players</button>
-
-        <span class="divider" aria-hidden="true"></span>
-
-        <!-- Drawing tools -->
         <button id="pen" class="btn btn--active" type="button">Pen</button>
         <button id="eraser" class="btn" type="button">Eraser</button>
         <button id="clear" class="btn btn--danger" type="button">Clear</button>
-
-        <span class="divider" aria-hidden="true"></span>
-
-        <!-- Players + Export -->
-        <button id="resetPlayers" class="btn" type="button">Reset Players</button>
         <button id="saveImage" class="btn" type="button">Save PNG</button>
       </div>
 
@@ -37,19 +25,5 @@
     </header>
 
     <main class="main">
-      <div
-        class="board-wrap"
-        id="boardWrap"
-        aria-label="Rugby pitch drawing board"
-      >
-        <!-- Player tokens layer (draggable in Players mode) -->
-        <div id="tokensLayer" class="tokens-layer" aria-hidden="true"></div>
-
-        <!-- Drawing layer (active in Draw mode) -->
-        <canvas id="board"></canvas>
-      </div>
-    </main>
-
-    <script src="./app.js"></script>
-  </body>
-</html>
+      <!-- Player tray at the top -->
+      <div class="player-tray" id="playerTray" aria-label="Players 1
