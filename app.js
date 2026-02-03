@@ -58,6 +58,12 @@ window.addEventListener("DOMContentLoaded", () => {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
+  // ===== Drawing colour (fix: store and update) =====
+  let currentColor = colorPicker.value || "#111111";
+  colorPicker.addEventListener("input", () => {
+    currentColor = colorPicker.value || "#111111";
+  });
+
   // ===== Drawing =====
   let tool = "pen"; // "pen" | "eraser"
   let drawing = false;
@@ -102,7 +108,7 @@ window.addEventListener("DOMContentLoaded", () => {
       ctx.lineWidth = Math.max(10, size * 5);
     } else {
       ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = colorPicker.value || "#111111";
+      ctx.strokeStyle = currentColor; // ✅ uses picker
       ctx.lineWidth = size;
     }
 
@@ -120,7 +126,7 @@ window.addEventListener("DOMContentLoaded", () => {
   canvas.addEventListener("pointercancel", stopDraw);
   canvas.addEventListener("pointerleave", stopDraw);
 
-  // ===== Players (tray spawns draggable copies) =====
+  // ===== Players =====
   const TOKEN_SIZE = 46;
 
   function setTokenPos(el, x, y) {
@@ -136,11 +142,9 @@ window.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  // Shared drag starter (NO synthetic events)
   function startDraggingToken(token, pointerId, startBoardPoint) {
     let dragging = true;
 
-    // Offset from pointer to token top-left (based on CSS left/top)
     const curLeft = parseFloat(token.style.left || "0");
     const curTop = parseFloat(token.style.top || "0");
     const offsetX = startBoardPoint.x - curLeft;
@@ -184,8 +188,6 @@ window.addEventListener("DOMContentLoaded", () => {
     token.addEventListener("pointerdown", (e) => {
       const p = getBoardPoint(e);
       startDraggingToken(token, e.pointerId, p);
-
-      // prevent drawing under token
       e.preventDefault();
       e.stopPropagation();
     });
@@ -210,29 +212,25 @@ window.addEventListener("DOMContentLoaded", () => {
     t.textContent = String(number);
 
     t.addEventListener("pointerdown", (e) => {
-      // Create token under pointer (centered)
       const p = getBoardPoint(e);
       const token = createBoardToken(number, p.x - TOKEN_SIZE / 2, p.y - TOKEN_SIZE / 2);
-
-      // Start dragging immediately and accurately
       startDraggingToken(token, e.pointerId, p);
-
       e.preventDefault();
     });
 
     playerTray.appendChild(t);
   }
 
-  // Populate tray 1–15
+  // Populate tray
   playerTray.innerHTML = "";
   for (let i = 1; i <= 15; i++) createTrayToken(i);
 
-  // Clear placed players
+  // Clear players
   clearPlayersBtn.addEventListener("click", () => {
     tokensLayer.innerHTML = "";
   });
 
-  // ===== Save PNG (pitch + drawings + tokens) =====
+  // ===== Save PNG =====
   function loadPitchImage() {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -263,7 +261,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const octx = out.getContext("2d");
     octx.setTransform(scale, 0, 0, scale, 0, 0);
 
-    // Pitch background
+    // Pitch
     try {
       const pitch = await loadPitchImage();
       octx.drawImage(pitch, 0, 0, w, h);
