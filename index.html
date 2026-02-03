@@ -1,20 +1,32 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Rugby Coaching Board</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
+
   <body>
-    <header>
-      <button id="pen">Pen</button>
-      <button id="eraser">Eraser</button>
-      <button id="clear">Clear</button>
+    <header class="toolbar">
+      <div class="toolbar__left">
+        <button id="pen" class="btn btn--active" type="button">Pen</button>
+        <button id="eraser" class="btn" type="button">Eraser</button>
+        <button id="clear" class="btn btn--danger" type="button">Clear</button>
+      </div>
+
+      <div class="toolbar__right">
+        <label class="label">
+          Size
+          <input id="size" type="range" min="2" max="18" value="4" />
+        </label>
+      </div>
     </header>
 
-    <main>
-      <canvas id="board"></canvas>
+    <main class="main">
+      <div class="board-wrap" aria-label="Rugby pitch drawing board">
+        <canvas id="board"></canvas>
+      </div>
     </main>
 
     <script src="./app.js"></script>
