@@ -13,16 +13,19 @@
         <button id="pen" class="btn btn--active" type="button">Pen</button>
         <button id="eraser" class="btn" type="button">Eraser</button>
         <button id="clearDraw" class="btn btn--danger" type="button">Clear Draw</button>
-        <button id="saveImage" class="btn" type="button">Save PNG</button>
-        <button id="clearPlayers" class="btn" type="button">Clear Players</button>
-        <button id="resetPlayers" class="btn" type="button">Reset Players</button>
-      </div>
 
-      <div class="toolbar__right">
+        <label class="label">
+          Colour
+          <input id="color" type="color" value="#111111" />
+        </label>
+
         <label class="label">
           Size
           <input id="size" type="range" min="2" max="18" value="4" />
         </label>
+
+        <button id="saveImage" class="btn" type="button">Save PNG</button>
+        <button id="clearPlayers" class="btn" type="button">Clear Players</button>
       </div>
     </header>
 
@@ -35,3 +38,8 @@
         <div id="tokensLayer" class="tokens-layer" aria-hidden="true"></div>
         <canvas id="board"></canvas>
       </div>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
