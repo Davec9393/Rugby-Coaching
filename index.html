@@ -1,305 +1,44 @@
-window.addEventListener("DOMContentLoaded", () => {
-  const $ = (id) => document.getElementById(id);
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rugby Coaching Board</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
 
-  // Elements
-  const boardWrap = $("boardWrap");
-  const canvas = $("board");
-  const ctx = canvas.getContext("2d", { willReadFrequently: false });
+  <body>
+    <header class="toolbar">
+      <div class="toolbar__left">
+        <button id="pen" class="btn btn--active" type="button">Pen</button>
+        <button id="eraser" class="btn" type="button">Eraser</button>
+        <button id="clearDraw" class="btn btn--danger" type="button">Clear Draw</button>
 
-  const penBtn = $("pen");
-  const eraserBtn = $("eraser");
-  const clearDrawBtn = $("clearDraw");
-  const saveBtn = $("saveImage");
+        <label class="label">
+          Colour
+          <input id="color" type="color" value="#111111" />
+        </label>
 
-  const sizeSlider = $("size");
-  const colorPicker = $("color");
+        <label class="label">
+          Size
+          <input id="size" type="range" min="2" max="18" value="4" />
+        </label>
 
-  const clearPlayersBtn = $("clearPlayers");
+        <button id="saveImage" class="btn" type="button">Save PNG</button>
+        <button id="clearPlayers" class="btn" type="button">Clear Players</button>
+      </div>
+    </header>
 
-  const playerTray = $("playerTray");
-  const tokensLayer = $("tokensLayer");
+    <main class="main">
+      <div class="player-tray" id="playerTray" aria-label="Players 1 to 15"></div>
 
-  // ===== Canvas sizing (HiDPI correct) =====
-  function resizeCanvasToDisplaySize() {
-    const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
+      <div class="board-wrap" id="boardWrap" aria-label="Rugby pitch drawing board">
+        <div id="tokensLayer" class="tokens-layer" aria-hidden="true"></div>
+        <canvas id="board"></canvas>
+      </div>
+    </main>
 
-    // preserve drawing
-    const old = document.createElement("canvas");
-    old.width = canvas.width;
-    old.height = canvas.height;
-    old.getContext("2d").drawImage(canvas, 0, 0);
+    <script src="./app.js"></script>
+  </body>
+</html>
 
-    canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-
-    // draw in CSS pixels
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-
-    // restore drawing scaled
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(old, 0, 0, old.width, old.height, 0, 0, canvas.width, canvas.height);
-    ctx.restore();
-  }
-
-  window.addEventListener("resize", resizeCanvasToDisplaySize);
-  resizeCanvasToDisplaySize();
-
-  // ===== Coordinate helpers =====
-  function getCanvasPoint(e) {
-    const r = canvas.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
-  }
-  function getBoardPoint(e) {
-    const r = boardWrap.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
-  }
-
-  // ===== Drawing =====
-  let tool = "pen"; // "pen" | "eraser"
-  let drawing = false;
-  let last = null;
-
-  function setTool(next) {
-    tool = next;
-    penBtn.classList.toggle("btn--active", tool === "pen");
-    eraserBtn.classList.toggle("btn--active", tool === "eraser");
-  }
-  setTool("pen");
-
-  penBtn.addEventListener("click", () => setTool("pen"));
-  eraserBtn.addEventListener("click", () => setTool("eraser"));
-
-  clearDrawBtn.addEventListener("click", () => {
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-  });
-
-  canvas.addEventListener("pointerdown", (e) => {
-    drawing = true;
-    last = getCanvasPoint(e);
-    canvas.setPointerCapture(e.pointerId);
-  });
-
-  canvas.addEventListener("pointermove", (e) => {
-    if (!drawing || !last) return;
-
-    const { x, y } = getCanvasPoint(e);
-
-    ctx.beginPath();
-    ctx.moveTo(last.x, last.y);
-    ctx.lineTo(x, y);
-
-    const size = Number(sizeSlider.value || 4);
-
-    if (tool === "eraser") {
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.lineWidth = Math.max(10, size * 5);
-    } else {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = colorPicker.value || "#111111";
-      ctx.lineWidth = size;
-    }
-
-    ctx.stroke();
-    last = { x, y };
-  });
-
-  function stopDraw(e) {
-    drawing = false;
-    last = null;
-    try { canvas.releasePointerCapture(e.pointerId); } catch {}
-  }
-
-  canvas.addEventListener("pointerup", stopDraw);
-  canvas.addEventListener("pointercancel", stopDraw);
-  canvas.addEventListener("pointerleave", stopDraw);
-
-  // ===== Players (tray spawns draggable copies) =====
-  const TOKEN_SIZE = 46;
-
-  function setTokenPos(el, x, y) {
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
-  }
-
-  function clampToBoard(x, y) {
-    const rect = boardWrap.getBoundingClientRect();
-    return {
-      x: Math.max(0, Math.min(x, rect.width - TOKEN_SIZE)),
-      y: Math.max(0, Math.min(y, rect.height - TOKEN_SIZE)),
-    };
-  }
-
-  // Shared drag starter (NO synthetic events)
-  function startDraggingToken(token, pointerId, startBoardPoint) {
-    let dragging = true;
-
-    // Offset from pointer to token top-left (based on CSS left/top)
-    const curLeft = parseFloat(token.style.left || "0");
-    const curTop = parseFloat(token.style.top || "0");
-    const offsetX = startBoardPoint.x - curLeft;
-    const offsetY = startBoardPoint.y - curTop;
-
-    token.style.zIndex = "10";
-    token.setPointerCapture(pointerId);
-
-    const onMove = (ev) => {
-      if (!dragging) return;
-      const p = getBoardPoint(ev);
-      const rawX = p.x - offsetX;
-      const rawY = p.y - offsetY;
-      const clamped = clampToBoard(rawX, rawY);
-      setTokenPos(token, clamped.x, clamped.y);
-
-      ev.preventDefault();
-      ev.stopPropagation();
-    };
-
-    const onUp = (ev) => {
-      dragging = false;
-      token.style.zIndex = "1";
-
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-
-      try { token.releasePointerCapture(pointerId); } catch {}
-
-      ev.preventDefault();
-      ev.stopPropagation();
-    };
-
-    window.addEventListener("pointermove", onMove, { passive: false });
-    window.addEventListener("pointerup", onUp, { passive: false });
-    window.addEventListener("pointercancel", onUp, { passive: false });
-  }
-
-  function makeTokenDraggable(token) {
-    token.addEventListener("pointerdown", (e) => {
-      const p = getBoardPoint(e);
-      startDraggingToken(token, e.pointerId, p);
-
-      // prevent drawing under token
-      e.preventDefault();
-      e.stopPropagation();
-    });
-  }
-
-  function createBoardToken(number, x, y) {
-    const t = document.createElement("div");
-    t.className = "token";
-    t.textContent = String(number);
-
-    const clamped = clampToBoard(x, y);
-    setTokenPos(t, clamped.x, clamped.y);
-
-    tokensLayer.appendChild(t);
-    makeTokenDraggable(t);
-    return t;
-  }
-
-  function createTrayToken(number) {
-    const t = document.createElement("div");
-    t.className = "tray-token";
-    t.textContent = String(number);
-
-    t.addEventListener("pointerdown", (e) => {
-      // Create token under pointer (centered)
-      const p = getBoardPoint(e);
-      const token = createBoardToken(number, p.x - TOKEN_SIZE / 2, p.y - TOKEN_SIZE / 2);
-
-      // Start dragging immediately and accurately
-      startDraggingToken(token, e.pointerId, p);
-
-      e.preventDefault();
-    });
-
-    playerTray.appendChild(t);
-  }
-
-  // Populate tray 1–15
-  playerTray.innerHTML = "";
-  for (let i = 1; i <= 15; i++) createTrayToken(i);
-
-  // Clear placed players
-  clearPlayersBtn.addEventListener("click", () => {
-    tokensLayer.innerHTML = "";
-  });
-
-  // ===== Save PNG (pitch + drawings + tokens) =====
-  function loadPitchImage() {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = "./pitch.svg";
-    });
-  }
-
-  function downloadDataUrl(dataUrl, filename) {
-    const a = document.createElement("a");
-    a.href = dataUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
-
-  async function saveBoardAsPng() {
-    const rect = boardWrap.getBoundingClientRect();
-    const w = Math.max(1, Math.floor(rect.width));
-    const h = Math.max(1, Math.floor(rect.height));
-
-    const scale = 2;
-    const out = document.createElement("canvas");
-    out.width = w * scale;
-    out.height = h * scale;
-    const octx = out.getContext("2d");
-    octx.setTransform(scale, 0, 0, scale, 0, 0);
-
-    // Pitch background
-    try {
-      const pitch = await loadPitchImage();
-      octx.drawImage(pitch, 0, 0, w, h);
-    } catch {
-      octx.fillStyle = "#2b8a3e";
-      octx.fillRect(0, 0, w, h);
-    }
-
-    // Drawings
-    octx.drawImage(canvas, 0, 0, w, h);
-
-    // Tokens
-    const tokens = [...tokensLayer.querySelectorAll(".token")];
-    for (const t of tokens) {
-      const x = parseFloat(t.style.left || "0");
-      const y = parseFloat(t.style.top || "0");
-      const n = t.textContent || "";
-
-      octx.beginPath();
-      octx.arc(x + TOKEN_SIZE / 2, y + TOKEN_SIZE / 2, TOKEN_SIZE / 2, 0, Math.PI * 2);
-      octx.fillStyle = "rgba(201, 42, 42, 0.95)";
-      octx.fill();
-
-      octx.lineWidth = 2;
-      octx.strokeStyle = "rgba(255,255,255,0.9)";
-      octx.stroke();
-
-      octx.fillStyle = "#fff";
-      octx.font = "800 18px system-ui, -apple-system, Segoe UI, Roboto, Arial";
-      octx.textAlign = "center";
-      octx.textBaseline = "middle";
-      octx.fillText(n, x + TOKEN_SIZE / 2, y + TOKEN_SIZE / 2);
-    }
-
-    downloadDataUrl(out.toDataURL("image/png"), `rugby-board-${Date.now()}.png`);
-  }
-
-  saveBtn.addEventListener("click", saveBoardAsPng);
-});
