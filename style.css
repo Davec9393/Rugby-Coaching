@@ -78,16 +78,15 @@ body {
   flex: 1;
   min-height: 0;
   position: relative;
-
   background: url("./pitch.svg") center / cover no-repeat;
-  background-color: #2b8a3e;
+  background-color: #2b8a3e; /* fallback */
 }
 
 /* Tokens layer above pitch */
 .tokens-layer {
   position: absolute;
   inset: 0;
-  pointer-events: none; /* drawing passes through; tokens enable their own events */
+  pointer-events: none; /* draw passes through except on tokens */
 }
 
 /* Drawing canvas */
@@ -98,7 +97,7 @@ body {
   height: 100%;
   display: block;
   background: transparent;
-  touch-action: none; /* important */
+  touch-action: none;
 }
 
 /* Tokens */
@@ -125,6 +124,6 @@ body {
 
 .token {
   position: absolute;
-  pointer-events: auto; /* tokens intercept pointer for dragging */
+  pointer-events: auto;
   cursor: grab;
 }
