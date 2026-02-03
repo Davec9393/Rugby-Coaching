@@ -12,7 +12,7 @@
       <div class="toolbar__left">
         <button id="pen" class="btn btn--active" type="button">Pen</button>
         <button id="eraser" class="btn" type="button">Eraser</button>
-        <button id="clear" class="btn btn--danger" type="button">Clear Draw</button>
+        <button id="clearDraw" class="btn btn--danger" type="button">Clear Draw</button>
         <button id="saveImage" class="btn" type="button">Save PNG</button>
         <button id="clearPlayers" class="btn" type="button">Clear Players</button>
         <button id="resetPlayers" class="btn" type="button">Reset Players</button>
@@ -27,7 +27,7 @@
     </header>
 
     <main class="main">
-      <!-- Player tray at the top -->
+      <!-- Player tray -->
       <div class="player-tray" id="playerTray" aria-label="Players 1 to 15"></div>
 
       <!-- Board -->
@@ -35,8 +35,3 @@
         <div id="tokensLayer" class="tokens-layer" aria-hidden="true"></div>
         <canvas id="board"></canvas>
       </div>
-    </main>
-
-    <script src="./app.js"></script>
-  </body>
-</html>
