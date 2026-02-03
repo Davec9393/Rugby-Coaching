@@ -15,9 +15,21 @@ window.addEventListener("DOMContentLoaded", () => {
   const colorPicker = $("color");
 
   const clearPlayersBtn = $("clearPlayers");
-
   const playerTray = $("playerTray");
   const tokensLayer = $("tokensLayer");
+
+  // ---- quick sanity check: show current color on screen (debug) ----
+  const debug = document.createElement("div");
+  debug.style.cssText =
+    "position:fixed;right:10px;bottom:10px;z-index:9999;" +
+    "background:#111;color:#fff;padding:6px 10px;border-radius:10px;" +
+    "font:12px system-ui;opacity:0.85";
+  debug.textContent = `color: ${colorPicker.value}`;
+  document.body.appendChild(debug);
+
+  colorPicker.addEventListener("input", () => {
+    debug.textContent = `color: ${colorPicker.value}`;
+  });
 
   // ===== Canvas sizing (HiDPI correct) =====
   function resizeCanvasToDisplaySize() {
@@ -57,12 +69,6 @@ window.addEventListener("DOMContentLoaded", () => {
     const r = boardWrap.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
-
-  // ===== Drawing colour (fix: store and update) =====
-  let currentColor = colorPicker.value || "#111111";
-  colorPicker.addEventListener("input", () => {
-    currentColor = colorPicker.value || "#111111";
-  });
 
   // ===== Drawing =====
   let tool = "pen"; // "pen" | "eraser"
@@ -108,7 +114,9 @@ window.addEventListener("DOMContentLoaded", () => {
       ctx.lineWidth = Math.max(10, size * 5);
     } else {
       ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = currentColor; // ✅ uses picker
+
+      // ✅ GUARANTEED: read picker value at draw time
+      ctx.strokeStyle = colorPicker.value || "#111111";
       ctx.lineWidth = size;
     }
 
@@ -221,7 +229,7 @@ window.addEventListener("DOMContentLoaded", () => {
     playerTray.appendChild(t);
   }
 
-  // Populate tray
+  // Populate tray 1–15
   playerTray.innerHTML = "";
   for (let i = 1; i <= 15; i++) createTrayToken(i);
 
@@ -274,6 +282,7 @@ window.addEventListener("DOMContentLoaded", () => {
     octx.drawImage(canvas, 0, 0, w, h);
 
     // Tokens
+    const TOKEN = 46;
     const tokens = [...tokensLayer.querySelectorAll(".token")];
     for (const t of tokens) {
       const x = parseFloat(t.style.left || "0");
@@ -281,7 +290,7 @@ window.addEventListener("DOMContentLoaded", () => {
       const n = t.textContent || "";
 
       octx.beginPath();
-      octx.arc(x + TOKEN_SIZE / 2, y + TOKEN_SIZE / 2, TOKEN_SIZE / 2, 0, Math.PI * 2);
+      octx.arc(x + TOKEN / 2, y + TOKEN / 2, TOKEN / 2, 0, Math.PI * 2);
       octx.fillStyle = "rgba(201, 42, 42, 0.95)";
       octx.fill();
 
@@ -293,7 +302,7 @@ window.addEventListener("DOMContentLoaded", () => {
       octx.font = "800 18px system-ui, -apple-system, Segoe UI, Roboto, Arial";
       octx.textAlign = "center";
       octx.textBaseline = "middle";
-      octx.fillText(n, x + TOKEN_SIZE / 2, y + TOKEN_SIZE / 2);
+      octx.fillText(n, x + TOKEN / 2, y + TOKEN / 2);
     }
 
     downloadDataUrl(out.toDataURL("image/png"), `rugby-board-${Date.now()}.png`);
