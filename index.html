@@ -12,8 +12,10 @@
       <div class="toolbar__left">
         <button id="pen" class="btn btn--active" type="button">Pen</button>
         <button id="eraser" class="btn" type="button">Eraser</button>
-        <button id="clear" class="btn btn--danger" type="button">Clear</button>
+        <button id="clear" class="btn btn--danger" type="button">Clear Draw</button>
         <button id="saveImage" class="btn" type="button">Save PNG</button>
+        <button id="clearPlayers" class="btn" type="button">Clear Players</button>
+        <button id="resetPlayers" class="btn" type="button">Reset Players</button>
       </div>
 
       <div class="toolbar__right">
@@ -25,10 +27,12 @@
     </header>
 
     <main class="main">
-      <div class="player-tray" id="playerTray"></div>
+      <!-- Player tray at the top -->
+      <div class="player-tray" id="playerTray" aria-label="Players 1 to 15"></div>
 
-      <div class="board-wrap" id="boardWrap">
-        <div id="tokensLayer" class="tokens-layer"></div>
+      <!-- Board -->
+      <div class="board-wrap" id="boardWrap" aria-label="Rugby pitch drawing board">
+        <div id="tokensLayer" class="tokens-layer" aria-hidden="true"></div>
         <canvas id="board"></canvas>
       </div>
     </main>
