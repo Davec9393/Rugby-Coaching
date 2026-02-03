@@ -1,6 +1,7 @@
 window.addEventListener("DOMContentLoaded", () => {
   const $ = (id) => document.getElementById(id);
 
+  // Elements
   const boardWrap = $("boardWrap");
   const canvas = $("board");
   const ctx = canvas.getContext("2d", { willReadFrequently: false });
@@ -9,10 +10,11 @@ window.addEventListener("DOMContentLoaded", () => {
   const eraserBtn = $("eraser");
   const clearDrawBtn = $("clearDraw");
   const saveBtn = $("saveImage");
+
   const sizeSlider = $("size");
+  const colorPicker = $("color");
 
   const clearPlayersBtn = $("clearPlayers");
-  const resetPlayersBtn = $("resetPlayers");
 
   const playerTray = $("playerTray");
   const tokensLayer = $("tokensLayer");
@@ -22,7 +24,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
 
-    // preserve drawing when resizing
+    // preserve drawing
     const old = document.createElement("canvas");
     old.width = canvas.width;
     old.height = canvas.height;
@@ -31,6 +33,7 @@ window.addEventListener("DOMContentLoaded", () => {
     canvas.width = Math.max(1, Math.floor(rect.width * dpr));
     canvas.height = Math.max(1, Math.floor(rect.height * dpr));
 
+    // draw in CSS pixels
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -45,19 +48,18 @@ window.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("resize", resizeCanvasToDisplaySize);
   resizeCanvasToDisplaySize();
 
-  // ===== Helpers for coordinates =====
+  // ===== Coordinate helpers =====
   function getCanvasPoint(e) {
     const r = canvas.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
-
   function getBoardPoint(e) {
     const r = boardWrap.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
   // ===== Drawing =====
-  let tool = "pen";
+  let tool = "pen"; // "pen" | "eraser"
   let drawing = false;
   let last = null;
 
@@ -100,7 +102,7 @@ window.addEventListener("DOMContentLoaded", () => {
       ctx.lineWidth = Math.max(10, size * 5);
     } else {
       ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = "#111";
+      ctx.strokeStyle = colorPicker.value || "#111111";
       ctx.lineWidth = size;
     }
 
@@ -118,7 +120,7 @@ window.addEventListener("DOMContentLoaded", () => {
   canvas.addEventListener("pointercancel", stopDraw);
   canvas.addEventListener("pointerleave", stopDraw);
 
-  // ===== Players (tray spawns copies) =====
+  // ===== Players (tray spawns draggable copies) =====
   const TOKEN_SIZE = 46;
 
   function setTokenPos(el, x, y) {
@@ -127,7 +129,6 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   function clampToBoard(x, y) {
-    // x/y are in board CSS pixels
     const rect = boardWrap.getBoundingClientRect();
     return {
       x: Math.max(0, Math.min(x, rect.width - TOKEN_SIZE)),
@@ -135,60 +136,69 @@ window.addEventListener("DOMContentLoaded", () => {
     };
   }
 
-  function makeTokenDraggable(token) {
-    let dragging = false;
-    let offsetX = 0;
-    let offsetY = 0;
+  // Shared drag starter (NO synthetic events)
+  function startDraggingToken(token, pointerId, startBoardPoint) {
+    let dragging = true;
 
-    token.addEventListener("pointerdown", (e) => {
-      dragging = true;
-      token.setPointerCapture(e.pointerId);
+    // Offset from pointer to token top-left (based on CSS left/top)
+    const curLeft = parseFloat(token.style.left || "0");
+    const curTop = parseFloat(token.style.top || "0");
+    const offsetX = startBoardPoint.x - curLeft;
+    const offsetY = startBoardPoint.y - curTop;
 
-      const p = getBoardPoint(e);
-      const curLeft = parseFloat(token.style.left || "0");
-      const curTop = parseFloat(token.style.top || "0");
+    token.style.zIndex = "10";
+    token.setPointerCapture(pointerId);
 
-      // Offset based on token's own CSS position (prevents drift)
-      offsetX = p.x - curLeft;
-      offsetY = p.y - curTop;
-
-      token.style.zIndex = "10";
-      e.preventDefault();
-      e.stopPropagation(); // prevents drawing starting underneath
-    });
-
-    token.addEventListener("pointermove", (e) => {
+    const onMove = (ev) => {
       if (!dragging) return;
-
-      const p = getBoardPoint(e);
+      const p = getBoardPoint(ev);
       const rawX = p.x - offsetX;
       const rawY = p.y - offsetY;
-
       const clamped = clampToBoard(rawX, rawY);
       setTokenPos(token, clamped.x, clamped.y);
 
+      ev.preventDefault();
+      ev.stopPropagation();
+    };
+
+    const onUp = (ev) => {
+      dragging = false;
+      token.style.zIndex = "1";
+
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+
+      try { token.releasePointerCapture(pointerId); } catch {}
+
+      ev.preventDefault();
+      ev.stopPropagation();
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp, { passive: false });
+    window.addEventListener("pointercancel", onUp, { passive: false });
+  }
+
+  function makeTokenDraggable(token) {
+    token.addEventListener("pointerdown", (e) => {
+      const p = getBoardPoint(e);
+      startDraggingToken(token, e.pointerId, p);
+
+      // prevent drawing under token
       e.preventDefault();
       e.stopPropagation();
     });
-
-    const stop = (e) => {
-      if (!dragging) return;
-      dragging = false;
-      token.style.zIndex = "1";
-      try { token.releasePointerCapture(e.pointerId); } catch {}
-      e.preventDefault();
-      e.stopPropagation();
-    };
-
-    token.addEventListener("pointerup", stop);
-    token.addEventListener("pointercancel", stop);
   }
 
   function createBoardToken(number, x, y) {
     const t = document.createElement("div");
     t.className = "token";
     t.textContent = String(number);
-    setTokenPos(t, x, y);
+
+    const clamped = clampToBoard(x, y);
+    setTokenPos(t, clamped.x, clamped.y);
+
     tokensLayer.appendChild(t);
     makeTokenDraggable(t);
     return t;
@@ -199,16 +209,14 @@ window.addEventListener("DOMContentLoaded", () => {
     t.className = "tray-token";
     t.textContent = String(number);
 
-    // Drag from tray => create a token at pointer position and drag it
     t.addEventListener("pointerdown", (e) => {
+      // Create token under pointer (centered)
       const p = getBoardPoint(e);
+      const token = createBoardToken(number, p.x - TOKEN_SIZE / 2, p.y - TOKEN_SIZE / 2);
 
-      // Start token centered under pointer
-      const start = clampToBoard(p.x - TOKEN_SIZE / 2, p.y - TOKEN_SIZE / 2);
-      const token = createBoardToken(number, start.x, start.y);
+      // Start dragging immediately and accurately
+      startDraggingToken(token, e.pointerId, p);
 
-      // Begin dragging immediately (using same logic as token drag)
-      token.dispatchEvent(new PointerEvent("pointerdown", e));
       e.preventDefault();
     });
 
@@ -219,21 +227,10 @@ window.addEventListener("DOMContentLoaded", () => {
   playerTray.innerHTML = "";
   for (let i = 1; i <= 15; i++) createTrayToken(i);
 
-  // ===== Clear / Reset players (NOW WORKS) =====
-  function clearPlayers() {
-    tokensLayer.querySelectorAll(".token").forEach((n) => n.remove());
-  }
-
-  function resetPlayers() {
-    // With tray-spawns-copies, reset == clear placed tokens
-    clearPlayers();
-  }
-
-  if (!clearPlayersBtn) console.warn("Missing button id=clearPlayers");
-  if (!resetPlayersBtn) console.warn("Missing button id=resetPlayers");
-
-  clearPlayersBtn?.addEventListener("click", clearPlayers);
-  resetPlayersBtn?.addEventListener("click", resetPlayers);
+  // Clear placed players
+  clearPlayersBtn.addEventListener("click", () => {
+    tokensLayer.innerHTML = "";
+  });
 
   // ===== Save PNG (pitch + drawings + tokens) =====
   function loadPitchImage() {
@@ -266,7 +263,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const octx = out.getContext("2d");
     octx.setTransform(scale, 0, 0, scale, 0, 0);
 
-    // Pitch
+    // Pitch background
     try {
       const pitch = await loadPitchImage();
       octx.drawImage(pitch, 0, 0, w, h);
@@ -275,7 +272,7 @@ window.addEventListener("DOMContentLoaded", () => {
       octx.fillRect(0, 0, w, h);
     }
 
-    // Drawing
+    // Drawings
     octx.drawImage(canvas, 0, 0, w, h);
 
     // Tokens
