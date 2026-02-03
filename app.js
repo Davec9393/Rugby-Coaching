@@ -7,7 +7,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const penBtn = $("pen");
   const eraserBtn = $("eraser");
-  const clearBtn = $("clear");
+  const clearDrawBtn = $("clearDraw");
   const saveBtn = $("saveImage");
   const sizeSlider = $("size");
 
@@ -31,12 +31,11 @@ window.addEventListener("DOMContentLoaded", () => {
     canvas.width = Math.max(1, Math.floor(rect.width * dpr));
     canvas.height = Math.max(1, Math.floor(rect.height * dpr));
 
-    // draw in CSS pixels
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    // restore old drawing scaled
+    // restore drawing scaled
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(old, 0, 0, old.width, old.height, 0, 0, canvas.width, canvas.height);
@@ -46,13 +45,15 @@ window.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("resize", resizeCanvasToDisplaySize);
   resizeCanvasToDisplaySize();
 
-  // ===== Correct pointer-to-canvas coordinates (fixes offset) =====
+  // ===== Helpers for coordinates =====
   function getCanvasPoint(e) {
     const r = canvas.getBoundingClientRect();
-    return {
-      x: e.clientX - r.left,
-      y: e.clientY - r.top,
-    };
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function getBoardPoint(e) {
+    const r = boardWrap.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
   // ===== Drawing =====
@@ -70,7 +71,7 @@ window.addEventListener("DOMContentLoaded", () => {
   penBtn.addEventListener("click", () => setTool("pen"));
   eraserBtn.addEventListener("click", () => setTool("eraser"));
 
-  clearBtn.addEventListener("click", () => {
+  clearDrawBtn.addEventListener("click", () => {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -126,6 +127,7 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   function clampToBoard(x, y) {
+    // x/y are in board CSS pixels
     const rect = boardWrap.getBoundingClientRect();
     return {
       x: Math.max(0, Math.min(x, rect.width - TOKEN_SIZE)),
@@ -135,30 +137,35 @@ window.addEventListener("DOMContentLoaded", () => {
 
   function makeTokenDraggable(token) {
     let dragging = false;
-    let offX = 0, offY = 0;
+    let offsetX = 0;
+    let offsetY = 0;
 
     token.addEventListener("pointerdown", (e) => {
       dragging = true;
       token.setPointerCapture(e.pointerId);
 
-      const r = token.getBoundingClientRect();
-      offX = e.clientX - r.left;
-      offY = e.clientY - r.top;
+      const p = getBoardPoint(e);
+      const curLeft = parseFloat(token.style.left || "0");
+      const curTop = parseFloat(token.style.top || "0");
+
+      // Offset based on token's own CSS position (prevents drift)
+      offsetX = p.x - curLeft;
+      offsetY = p.y - curTop;
 
       token.style.zIndex = "10";
       e.preventDefault();
-      e.stopPropagation(); // prevents drawing underneath
+      e.stopPropagation(); // prevents drawing starting underneath
     });
 
     token.addEventListener("pointermove", (e) => {
       if (!dragging) return;
 
-      const wrap = boardWrap.getBoundingClientRect();
-      const rawX = (e.clientX - wrap.left) - offX;
-      const rawY = (e.clientY - wrap.top) - offY;
+      const p = getBoardPoint(e);
+      const rawX = p.x - offsetX;
+      const rawY = p.y - offsetY;
 
-      const p = clampToBoard(rawX, rawY);
-      setTokenPos(token, p.x, p.y);
+      const clamped = clampToBoard(rawX, rawY);
+      setTokenPos(token, clamped.x, clamped.y);
 
       e.preventDefault();
       e.stopPropagation();
@@ -192,62 +199,41 @@ window.addEventListener("DOMContentLoaded", () => {
     t.className = "tray-token";
     t.textContent = String(number);
 
-    // Drag from tray => create a token and drag it immediately
+    // Drag from tray => create a token at pointer position and drag it
     t.addEventListener("pointerdown", (e) => {
-      const start = clampToBoard(20, 20);
+      const p = getBoardPoint(e);
+
+      // Start token centered under pointer
+      const start = clampToBoard(p.x - TOKEN_SIZE / 2, p.y - TOKEN_SIZE / 2);
       const token = createBoardToken(number, start.x, start.y);
 
-      const wrap = boardWrap.getBoundingClientRect();
-      const tr = token.getBoundingClientRect();
-      const offX = e.clientX - tr.left;
-      const offY = e.clientY - tr.top;
-
-      token.setPointerCapture(e.pointerId);
-      token.style.zIndex = "10";
-
-      const onMove = (ev) => {
-        const rawX = (ev.clientX - wrap.left) - offX;
-        const rawY = (ev.clientY - wrap.top) - offY;
-        const p = clampToBoard(rawX, rawY);
-        setTokenPos(token, p.x, p.y);
-        ev.preventDefault();
-      };
-
-      const onUp = (ev) => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-        window.removeEventListener("pointercancel", onUp);
-        token.style.zIndex = "1";
-        try { token.releasePointerCapture(e.pointerId); } catch {}
-        ev.preventDefault();
-      };
-
-      window.addEventListener("pointermove", onMove, { passive: false });
-      window.addEventListener("pointerup", onUp, { passive: false });
-      window.addEventListener("pointercancel", onUp, { passive: false });
-
+      // Begin dragging immediately (using same logic as token drag)
+      token.dispatchEvent(new PointerEvent("pointerdown", e));
       e.preventDefault();
     });
 
     playerTray.appendChild(t);
   }
 
-  // Populate tray
+  // Populate tray 1–15
   playerTray.innerHTML = "";
   for (let i = 1; i <= 15; i++) createTrayToken(i);
 
-  // ===== Clear / Reset players =====
+  // ===== Clear / Reset players (NOW WORKS) =====
   function clearPlayers() {
-    tokensLayer.innerHTML = "";
+    tokensLayer.querySelectorAll(".token").forEach((n) => n.remove());
   }
 
   function resetPlayers() {
-    // With tray-spawns-copies, reset == clear the placed tokens
+    // With tray-spawns-copies, reset == clear placed tokens
     clearPlayers();
   }
 
-  clearPlayersBtn.addEventListener("click", clearPlayers);
-  resetPlayersBtn.addEventListener("click", resetPlayers);
+  if (!clearPlayersBtn) console.warn("Missing button id=clearPlayers");
+  if (!resetPlayersBtn) console.warn("Missing button id=resetPlayers");
+
+  clearPlayersBtn?.addEventListener("click", clearPlayers);
+  resetPlayersBtn?.addEventListener("click", resetPlayers);
 
   // ===== Save PNG (pitch + drawings + tokens) =====
   function loadPitchImage() {
@@ -273,14 +259,14 @@ window.addEventListener("DOMContentLoaded", () => {
     const w = Math.max(1, Math.floor(rect.width));
     const h = Math.max(1, Math.floor(rect.height));
 
-    const scale = 2; // increase to 3 if you want even sharper images
+    const scale = 2;
     const out = document.createElement("canvas");
     out.width = w * scale;
     out.height = h * scale;
     const octx = out.getContext("2d");
     octx.setTransform(scale, 0, 0, scale, 0, 0);
 
-    // 1) pitch background
+    // Pitch
     try {
       const pitch = await loadPitchImage();
       octx.drawImage(pitch, 0, 0, w, h);
@@ -289,10 +275,10 @@ window.addEventListener("DOMContentLoaded", () => {
       octx.fillRect(0, 0, w, h);
     }
 
-    // 2) drawing
+    // Drawing
     octx.drawImage(canvas, 0, 0, w, h);
 
-    // 3) tokens
+    // Tokens
     const tokens = [...tokensLayer.querySelectorAll(".token")];
     for (const t of tokens) {
       const x = parseFloat(t.style.left || "0");
