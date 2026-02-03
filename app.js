@@ -1,30 +1,36 @@
-// ===== Elements =====
-const boardWrap = document.getElementById("boardWrap");
-const canvas = document.getElementById("board");
-const ctx = canvas.getContext("2d", { willReadFrequently: false });
+// Helper: safely get elements
+const $ = (id) => document.getElementById(id);
 
-const penBtn = document.getElementById("pen");
-const eraserBtn = document.getElementById("eraser");
-const clearBtn = document.getElementById("clear");
-const saveBtn = document.getElementById("saveImage");
-const sizeSlider = document.getElementById("size");
+const boardWrap = $("boardWrap");
+const canvas = $("board");
+const ctx = canvas?.getContext("2d");
 
-const playerTray = document.getElementById("playerTray");
-const tokensLayer = document.getElementById("tokensLayer");
+const penBtn = $("pen");
+const eraserBtn = $("eraser");
+const clearBtn = $("clear");
+const saveBtn = $("saveImage");
+const sizeSlider = $("size");
 
-// ===== State =====
-let tool = "pen";
-let drawing = false;
-let last = null;
+const playerTray = $("playerTray");
+const tokensLayer = $("tokensLayer");
 
-const TOKEN_SIZE = 46;
+if (!boardWrap || !canvas || !ctx || !playerTray || !tokensLayer) {
+  // If anything is missing, show a visible error instead of a blank page
+  document.body.innerHTML = `
+    <div style="padding:16px;font-family:system-ui">
+      <h2>Setup error</h2>
+      <p>One or more required elements could not be found.</p>
+      <p>Check that index.html includes: boardWrap, board, playerTray, tokensLayer.</p>
+    </div>`;
+  throw new Error("Missing required DOM elements");
+}
 
-// ===== Canvas sizing (must match CSS size) =====
-function resizeCanvasToDisplaySize() {
+// ===== Canvas resize =====
+function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
 
-  // Keep existing drawing when resizing
+  // preserve drawing
   const old = document.createElement("canvas");
   old.width = canvas.width;
   old.height = canvas.height;
@@ -33,41 +39,41 @@ function resizeCanvasToDisplaySize() {
   canvas.width = Math.max(1, Math.floor(rect.width * dpr));
   canvas.height = Math.max(1, Math.floor(rect.height * dpr));
 
-  // Draw using CSS pixels
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  // Restore old drawing scaled
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(old, 0, 0, old.width, old.height, 0, 0, canvas.width, canvas.height);
   ctx.restore();
 }
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
 
-window.addEventListener("resize", resizeCanvasToDisplaySize);
-resizeCanvasToDisplaySize();
+// ===== Drawing =====
+let tool = "pen";
+let drawing = false;
+let last = null;
 
-// ===== Tool buttons =====
-function setActiveTool(nextTool) {
-  tool = nextTool;
-  penBtn.classList.toggle("btn--active", tool === "pen");
-  eraserBtn.classList.toggle("btn--active", tool === "eraser");
+function setTool(t) {
+  tool = t;
+  penBtn?.classList.toggle("btn--active", tool === "pen");
+  eraserBtn?.classList.toggle("btn--active", tool === "eraser");
 }
-penBtn.addEventListener("click", () => setActiveTool("pen"));
-eraserBtn.addEventListener("click", () => setActiveTool("eraser"));
-setActiveTool("pen");
+setTool("pen");
 
-clearBtn.addEventListener("click", () => {
+penBtn?.addEventListener("click", () => setTool("pen"));
+eraserBtn?.addEventListener("click", () => setTool("eraser"));
+
+clearBtn?.addEventListener("click", () => {
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.restore();
 });
 
-// ===== Drawing (always enabled; tokens intercept their own drags) =====
 canvas.addEventListener("pointerdown", (e) => {
-  // If the user tapped a token, the token element will receive the event, not the canvas.
   drawing = true;
   last = { x: e.offsetX, y: e.offsetY };
   canvas.setPointerCapture(e.pointerId);
@@ -83,7 +89,7 @@ canvas.addEventListener("pointermove", (e) => {
   ctx.moveTo(last.x, last.y);
   ctx.lineTo(x, y);
 
-  const size = Number(sizeSlider.value || 4);
+  const size = Number(sizeSlider?.value || 4);
 
   if (tool === "eraser") {
     ctx.globalCompositeOperation = "destination-out";
@@ -101,79 +107,59 @@ canvas.addEventListener("pointermove", (e) => {
 function stopDrawing(e) {
   drawing = false;
   last = null;
-  if (e?.pointerId) {
-    try { canvas.releasePointerCapture(e.pointerId); } catch {}
-  }
+  try { canvas.releasePointerCapture(e.pointerId); } catch {}
 }
-
 canvas.addEventListener("pointerup", stopDrawing);
 canvas.addEventListener("pointercancel", stopDrawing);
-canvas.addEventListener("pointerleave", stopDrawing);
 
-// ===== Tokens: drag from tray -> creates a board token =====
-function clampToBoard(x, y) {
-  const rect = boardWrap.getBoundingClientRect();
-  const maxX = rect.width - TOKEN_SIZE;
-  const maxY = rect.height - TOKEN_SIZE;
-  return {
-    x: Math.min(Math.max(0, x), maxX),
-    y: Math.min(Math.max(0, y), maxY),
-  };
-}
+// ===== Tokens =====
+const TOKEN_SIZE = 46;
 
 function setTokenPos(el, x, y) {
   el.style.left = `${x}px`;
   el.style.top = `${y}px`;
 }
 
-function makeBoardToken(number, startX, startY) {
-  const token = document.createElement("div");
-  token.className = "token";
-  token.textContent = String(number);
-  setTokenPos(token, startX, startY);
-  tokensLayer.appendChild(token);
-  makeTokenDraggable(token);
-  return token;
+function clampToBoard(x, y) {
+  const rect = boardWrap.getBoundingClientRect();
+  return {
+    x: Math.max(0, Math.min(x, rect.width - TOKEN_SIZE)),
+    y: Math.max(0, Math.min(y, rect.height - TOKEN_SIZE)),
+  };
 }
 
 function makeTokenDraggable(token) {
-  let draggingToken = false;
-  let offset = { x: 0, y: 0 };
+  let dragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
 
   token.addEventListener("pointerdown", (e) => {
-    draggingToken = true;
+    dragging = true;
     token.setPointerCapture(e.pointerId);
-
-    const tokenRect = token.getBoundingClientRect();
-    offset.x = e.clientX - tokenRect.left;
-    offset.y = e.clientY - tokenRect.top;
-
+    const r = token.getBoundingClientRect();
+    offsetX = e.clientX - r.left;
+    offsetY = e.clientY - r.top;
     token.style.zIndex = "10";
     e.preventDefault();
     e.stopPropagation();
   });
 
   token.addEventListener("pointermove", (e) => {
-    if (!draggingToken) return;
-
-    const wrapRect = boardWrap.getBoundingClientRect();
-    const rawX = (e.clientX - wrapRect.left) - offset.x;
-    const rawY = (e.clientY - wrapRect.top) - offset.y;
-
-    const { x, y } = clampToBoard(rawX, rawY);
-    setTokenPos(token, x, y);
-
+    if (!dragging) return;
+    const wrap = boardWrap.getBoundingClientRect();
+    const rawX = (e.clientX - wrap.left) - offsetX;
+    const rawY = (e.clientY - wrap.top) - offsetY;
+    const p = clampToBoard(rawX, rawY);
+    setTokenPos(token, p.x, p.y);
     e.preventDefault();
     e.stopPropagation();
   });
 
   const stop = (e) => {
-    if (!draggingToken) return;
-    draggingToken = false;
+    if (!dragging) return;
+    dragging = false;
     token.style.zIndex = "1";
-    if (e?.pointerId) {
-      try { token.releasePointerCapture(e.pointerId); } catch {}
-    }
+    try { token.releasePointerCapture(e.pointerId); } catch {}
     e.preventDefault();
     e.stopPropagation();
   };
@@ -182,14 +168,126 @@ function makeTokenDraggable(token) {
   token.addEventListener("pointercancel", stop);
 }
 
+function makeBoardToken(number, x, y) {
+  const t = document.createElement("div");
+  t.className = "token";
+  t.textContent = String(number);
+  setTokenPos(t, x, y);
+  tokensLayer.appendChild(t);
+  makeTokenDraggable(t);
+}
+
 function makeTrayToken(number) {
   const t = document.createElement("div");
   t.className = "tray-token";
   t.textContent = String(number);
 
-  // Dragging from tray spawns a board token and drags it immediately
   t.addEventListener("pointerdown", (e) => {
-    const wrapRect = boardWrap.getBoundingClientRect();
-
-    // Spawn near the top-left of the pitch area by default
+    const wrap = boardWrap.getBoundingClientRect();
     const start = clampToBoard(20, 20);
+    makeBoardToken(number, start.x, start.y);
+
+    // Immediately position last created token under finger
+    const token = tokensLayer.lastElementChild;
+    const tokenRect = token.getBoundingClientRect();
+    const offX = e.clientX - tokenRect.left;
+    const offY = e.clientY - tokenRect.top;
+
+    token.setPointerCapture(e.pointerId);
+    token.style.zIndex = "10";
+
+    const onMove = (ev) => {
+      const rawX = (ev.clientX - wrap.left) - offX;
+      const rawY = (ev.clientY - wrap.top) - offY;
+      const p = clampToBoard(rawX, rawY);
+      setTokenPos(token, p.x, p.y);
+      ev.preventDefault();
+    };
+
+    const onUp = (ev) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      token.style.zIndex = "1";
+      try { token.releasePointerCapture(e.pointerId); } catch {}
+      ev.preventDefault();
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp, { passive: false });
+    window.addEventListener("pointercancel", onUp, { passive: false });
+
+    e.preventDefault();
+  });
+
+  playerTray.appendChild(t);
+}
+
+for (let i = 1; i <= 15; i++) makeTrayToken(i);
+
+// ===== Save PNG =====
+function loadPitchImage() {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = "./pitch.svg";
+  });
+}
+
+function downloadDataUrl(dataUrl, filename) {
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+async function saveBoardAsPng() {
+  const rect = boardWrap.getBoundingClientRect();
+  const w = Math.max(1, Math.floor(rect.width));
+  const h = Math.max(1, Math.floor(rect.height));
+
+  const scale = 2;
+  const out = document.createElement("canvas");
+  out.width = w * scale;
+  out.height = h * scale;
+  const octx = out.getContext("2d");
+  octx.setTransform(scale, 0, 0, scale, 0, 0);
+
+  try {
+    const pitch = await loadPitchImage();
+    octx.drawImage(pitch, 0, 0, w, h);
+  } catch {
+    octx.fillStyle = "#2b8a3e";
+    octx.fillRect(0, 0, w, h);
+  }
+
+  octx.drawImage(canvas, 0, 0, w, h);
+
+  // draw tokens
+  [...tokensLayer.querySelectorAll(".token")].forEach((t) => {
+    const x = parseFloat(t.style.left || "0");
+    const y = parseFloat(t.style.top || "0");
+    const n = t.textContent || "";
+
+    octx.beginPath();
+    octx.arc(x + TOKEN_SIZE/2, y + TOKEN_SIZE/2, TOKEN_SIZE/2, 0, Math.PI*2);
+    octx.fillStyle = "rgba(201, 42, 42, 0.95)";
+    octx.fill();
+    octx.lineWidth = 2;
+    octx.strokeStyle = "rgba(255,255,255,0.9)";
+    octx.stroke();
+
+    octx.fillStyle = "#fff";
+    octx.font = "800 18px system-ui, -apple-system, Segoe UI, Roboto, Arial";
+    octx.textAlign = "center";
+    octx.textBaseline = "middle";
+    octx.fillText(n, x + TOKEN_SIZE/2, y + TOKEN_SIZE/2);
+  });
+
+  downloadDataUrl(out.toDataURL("image/png"), `rugby-board-${Date.now()}.png`);
+}
+
+saveBtn?.addEventListener("click", saveBoardAsPng);
