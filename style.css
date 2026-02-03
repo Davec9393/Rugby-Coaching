@@ -16,18 +16,17 @@ body {
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 10px;
   border-bottom: 1px solid #ddd;
   background: #fff;
+  flex-wrap: wrap;
 }
 
-.toolbar__left,
-.toolbar__right {
+.toolbar__left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -49,7 +48,7 @@ body {
 }
 
 .label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
   font-size: 14px;
@@ -88,7 +87,7 @@ body {
 .tokens-layer {
   position: absolute;
   inset: 0;
-  pointer-events: none; /* allow drawing unless on a token */
+  pointer-events: none; /* drawing passes through; tokens enable their own events */
 }
 
 /* Drawing canvas */
@@ -99,10 +98,10 @@ body {
   height: 100%;
   display: block;
   background: transparent;
-  touch-action: none;
+  touch-action: none; /* important */
 }
 
-/* Token styles */
+/* Tokens */
 .tray-token, .token {
   width: 46px;
   height: 46px;
